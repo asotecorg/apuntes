@@ -13,11 +13,11 @@ _
 ## formulario-no-residentes.html 
 - -  form class="user"   action="#" th:action="@{${uri}?  ${uri} : '/coops/coopcica/edit'}" --> poner el nombre de la empresa
 - - input type="hidden" name="nomempresa" value="coopcica"/> --> poner el carpeta de la empresa
-
+- - th:href="@{'/coops/coopcica/'}" class="btn btn-success btn-user btn-block">Salir</a> --> poner el carpeta de la empresa
 ## formulario-residentes.html 
 - -  form class="user"   action="#" th:action="@{${uri}?  ${uri} : '/coops/coopcica/edit'}" --> poner el nombre de la empresa
 - - input type="hidden" name="nomempresa" value="coopcica"/> --> poner el carpeta de la empresa
-
+- - th:href="@{'/coops/coopcica/'}" class="btn btn-success btn-user btn-block">Salir</a> --> poner el carpeta de la empresa
 ## reporte.html 
 - -  form class="user"   action="#" th:action="@{${uri}?  ${uri} : '/coops/coopcica/edit'}" --> poner el nombre de la empresa
 - - input type="hidden" name="nomempresa" value="coopcica"/> --> poner el carpeta de la empresa
