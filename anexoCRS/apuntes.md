@@ -21,3 +21,4 @@ _
 ## reporte.html 
 - -  form class="user"   action="#" th:action="@{${uri}?  ${uri} : '/coops/coopcica/edit'}" --> poner el nombre de la empresa
 - - input type="hidden" name="nomempresa" value="coopcica"/> --> poner el carpeta de la empresa
+- - a th:href="@{'/coops/coopcica/'}" class="btn btn-success btn-user btn-block">Finalizar</a> --> poner el carpeta de la empresa
