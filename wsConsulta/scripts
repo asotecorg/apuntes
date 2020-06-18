@@ -1,0 +1,2566 @@
+-- Table: sgf_mensajes
+
+-- DROP TABLE sgf_mensajes;
+
+CREATE TABLE sgf_mensajes
+(
+  num_mensaje numeric(20,0) NOT NULL,
+  fec_mensaje date,
+  cod_socio numeric(10,0),
+  cod_tipo_id character(1),
+  num_id character varying(20),
+  nom_socio character varying(100),
+  ape_socio character varying(100),
+  tel_celular character varying(20),
+  dir_correo character varying(100),
+  cod_producto numeric(2,0),
+  cod_cuenta numeric(20,0),
+  cod_categoria numeric(2,0),
+  nom_producto character varying(100),
+  nom_subproducto1 character varying(100) DEFAULT '.'::character varying,
+  nom_subproducto2 character varying(100),
+  nom_subproducto3 character varying(100),
+  val_subtotal1 numeric(18,2),
+  val_subtotal2 numeric(18,2),
+  val_subtotal3 numeric(18,2),
+  val_total numeric(18,2),
+  fec_vencimiento date,
+  num_dias_mora numeric(5,0),
+  txt_estado character varying(100),
+  txt_observacion character varying(100),
+  sts_mensaje character varying(1),
+  fec_usrmod timestamp without time zone,
+  cod_usrmod numeric(12,0),
+  cod_mensaje numeric(5,0),
+  fec_trx timestamp without time zone,
+  cta_destino character varying(100),
+  txt_adicional character varying(100),
+  txt_oficina character varying(100) DEFAULT 'Matriz'::character varying,
+  cod_subcategoria numeric(3,0) DEFAULT 1,
+  cod_prioridad numeric(2,0) DEFAULT 3,
+  CONSTRAINT sgf_mensajes_pkey PRIMARY KEY (num_mensaje )
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE sgf_mensajes
+  OWNER TO postgres;
+GRANT ALL ON TABLE sgf_mensajes TO postgres;
+
+
+
+-- Function: coop_sp_nct_interna(numeric, numeric, date, numeric)
+
+-- DROP FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric);
+
+CREATE OR REPLACE FUNCTION coop_sp_nct_interna(IN a_cod_producto numeric, IN a_cod_cuenta numeric, IN a_fecha date, IN a_val_retiro numeric, OUT a_sts_retorno numeric)
+  RETURNS numeric AS
+$BODY$
+DECLARE
+
+        --a_cod_empresa ALIAS FOR $1;
+    --a_cod_producto ALIAS FOR $2;
+    --a_cod_cuenta ALIAS FOR $3;
+    --a_fecha ALIAS FOR $4;
+        ldo_cod_cta numeric;
+        li_ano integer := 0;
+    li_mes integer := 0;
+    li_nro_reg integer := 0;
+    ldo_val_saldo numeric;
+    ldo_val_creditos numeric;
+    ldo_val_debitos numeric;
+    ldo_val_efectivo numeric;
+    ldo_val_cheques numeric;
+   ldo_val_disponible numeric;
+    ld_fecha date;
+    ld_fec_ini date;
+	gi_oficina numeric;
+	li_cod_oficina numeric;
+	ldo_num_transaccion numeric;
+	ll_num_reg numeric;
+	
+        regs record;
+        li_res numeric;
+    gd_fecmov date;
+    gy_cod_caja numeric;
+    gdo_cod_empleado numeric;
+     ls_sts_tarjeta text;
+     ls_sts_apecie text;
+     li_cod_producto numeric;
+     ldo_cod_cuenta numeric;
+     ldo_val_efe numeric;
+     ldo_val_chq numeric;
+     ls_cod_cuenta_contable_db text;
+     ls_cod_cuenta_contable_cr text;
+     ls_cod_cuenta_contable_db_chq text;
+      ls_cod_cuenta_contable_cr_chq text;
+     ld_fec_movimiento date;
+     ls_cod_transaccion text;
+     ldt_fec_usrmod timestamp without time zone;
+      ldt_fec_registro timestamp without time zone;
+     ldo_val_aut numeric;
+     ll_cod_caja numeric;  
+     gdo_empleado numeric;
+     a_cod_empleado numeric;        
+           li_cod_firma1 numeric;  
+           li_cod_firma2 numeric;   
+           ldo_num_documento numeric;  
+           ldo_num_libreta numeric;   
+           ldo_cod_empleado numeric;   
+             
+           ls_txt_referencia text; 
+           ls_num_cheque numeric;
+     
+     
+    ldo_val_atm_ret_con_redlocal numeric;   
+    ldo_val_atm_ret_con_banred  numeric;    
+    ldo_val_atm_ret_con_conecta  numeric;    
+    ldo_val_atm_ret_con_otrared  numeric;    
+    ldo_val_atm_ret_con_iva_redlocal  numeric;    
+    ldo_val_atm_ret_con_iva_banred   numeric;    
+    ldo_val_atm_ret_con_iva_conecta   numeric;    
+    ldo_val_atm_ret_con_iva_otrared   numeric; 
+    ldo_val_comision  numeric;
+    ldo_val_atm_ret_redlocal numeric;   
+    ldo_val_atm_ret_banred  numeric;    
+    ldo_val_atm_ret_conecta  numeric;    
+    ldo_val_atm_ret_otrared  numeric;    
+    ldo_val_atm_ret_iva_redlocal  numeric;    
+    ldo_val_atm_ret_iva_banred   numeric;    
+    ldo_val_atm_ret_iva_conecta   numeric;    
+    ldo_val_atm_ret_iva_otrared   numeric; 
+    ldo_val_comision_ret  numeric;
+BEGIN
+  
+   if isnull(a_val_retiro,-1) = -1 then 
+	   a_val_retiro :=0;
+	end if;
+
+  a_cod_empleado := 99;
+   
+   -- comision por retiro con consulta impresa
+   ldo_val_atm_ret_con_redlocal := 0;   
+          ldo_val_atm_ret_con_banred := 0;    
+          ldo_val_atm_ret_con_conecta := 0;    
+          ldo_val_atm_ret_con_otrared := 0;    
+          ldo_val_atm_ret_con_iva_redlocal := 0;    
+          ldo_val_atm_ret_con_iva_banred  := 0;    
+          ldo_val_atm_ret_con_iva_conecta  := 0;    
+          ldo_val_atm_ret_con_iva_otrared  := 0; 
+     ldo_val_atm_ret_redlocal := 0;   
+          ldo_val_atm_ret_banred := 0;    
+          ldo_val_atm_ret_conecta := 0;    
+          ldo_val_atm_ret_otrared := 0;    
+          ldo_val_atm_ret_iva_redlocal := 0;    
+          ldo_val_atm_ret_iva_banred  := 0;    
+          ldo_val_atm_ret_iva_conecta  := 0;    
+          ldo_val_atm_ret_iva_otrared  := 0;      
+   ldo_val_comision := 0;
+   ldo_val_comision_ret := 0;
+   li_res := 1;
+   
+   if li_res = 1  then
+        SELECT val_atm_ret_con_redlocal,   
+          val_atm_ret_con_banred,   
+          val_atm_ret_con_conecta,   
+          val_atm_ret_con_otrared,   
+          val_atm_ret_con_iva_redlocal,   
+          val_atm_ret_con_iva_banred,   
+          val_atm_ret_con_iva_conecta,   
+          val_atm_ret_con_iva_otrared  ,
+          val_atm_ret_redlocal,   
+          val_atm_ret_banred,   
+          val_atm_ret_conecta,   
+          val_atm_ret_otrared,   
+          val_atm_ret_iva_redlocal,   
+          val_atm_ret_iva_banred,   
+          val_atm_ret_iva_conecta,   
+          val_atm_ret_iva_otrared  
+       into
+          ldo_val_atm_ret_con_redlocal,   
+          ldo_val_atm_ret_con_banred,   
+          ldo_val_atm_ret_con_conecta,   
+          ldo_val_atm_ret_con_otrared,   
+          ldo_val_atm_ret_con_iva_redlocal,   
+          ldo_val_atm_ret_con_iva_banred,   
+          ldo_val_atm_ret_con_iva_conecta,   
+          ldo_val_atm_ret_con_iva_otrared  ,
+          ldo_val_atm_ret_redlocal,   
+          ldo_val_atm_ret_banred,   
+          ldo_val_atm_ret_conecta,   
+          ldo_val_atm_ret_otrared,   
+          ldo_val_atm_ret_iva_redlocal,   
+          ldo_val_atm_ret_iva_banred,   
+          ldo_val_atm_ret_iva_conecta,   
+          ldo_val_atm_ret_iva_otrared
+    	FROM sgf_prod_comision  
+    	where cod_producto = a_cod_producto;
+      if found  then
+        
+        ldo_val_comision :=  0; --ldo_val_atm_ret_otrared;
+           
+     end if;
+   end if;
+    ldo_val_comision :=  0;
+   ldo_val_comision_ret := 0;
+   
+   if li_res = 1 then 
+      
+		select fec_mov
+		into gd_fecmov
+		from gen_empresa
+		where cod_empresa = 1;
+      if not found then
+         li_res := -4; -- no pudo obtener la fecha
+      else
+         gy_cod_caja := 99;
+
+			select sts_apecie
+			into ls_sts_apecie
+			from sgf_caja, gen_empleado
+			where sgf_caja.cod_caja = gy_cod_caja
+			and sgf_caja.cod_empleado = gen_empleado.cod_empleado;
+			if not found then
+         	li_res := -5; -- no existe caja
+      	
+			end if;
+      end if;
+   end if;
+
+   if li_res = 1 then
+      li_cod_producto := a_cod_producto;
+      ldo_cod_cuenta := a_cod_cuenta;
+      ldo_val_efe := a_val_retiro + ldo_val_comision + ldo_val_comision_ret;
+      ldo_val_chq := 0;
+      ldo_val_efectivo := ldo_val_efe;
+      ldo_val_cheques := ldo_val_chq;
+
+		update sgf_cuenta
+		set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+		where cod_producto = li_cod_producto
+		and cod_cuenta = ldo_cod_cuenta;
+
+		IF not found THEN	
+			li_res := -6; --	ls_txt_error="No es posible actualizar el saldo en la cuenta"			
+		else
+			ldo_val_aut := 0;
+
+			select val_inicial_apertura
+			into ldo_val_aut
+			from sgf_cuenta
+			where cod_producto = li_cod_producto
+			and cod_cuenta = ldo_cod_cuenta;
+			if ldo_val_aut < 0 then
+			   li_res := -7; --				ls_txt_error="El monto a Retirar excede el limite permitido"
+			 
+            -- reversa
+	         update sgf_cuenta
+				set val_inicial_apertura = isnull(val_inicial_apertura,0) - ldo_val_efe - ldo_val_chq
+				where cod_producto = li_cod_producto
+				and cod_cuenta = ldo_cod_cuenta;
+
+			end if;
+		end if;
+
+   end if;
+
+   if li_res = 1 then
+       ldo_val_saldo := 0;
+       
+       update sgf_cuenta
+         set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+           val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+       where cod_producto = a_cod_producto
+       and cod_cuenta = a_cod_cuenta;
+       IF found THEN
+            
+         select val_saldo, val_efectivo
+         into ldo_val_saldo, ldo_val_disponible
+         from sgf_cuenta
+         where cod_producto = a_cod_producto
+         and cod_cuenta = a_cod_cuenta;
+       
+
+         if isnull(ldo_val_saldo,-1) = -1 or ldo_val_saldo < 0 then
+           li_res := -3;
+         end if;
+   
+         if isnull(ldo_val_disponible,-1) = -1 or ldo_val_disponible < 0 then
+            li_res := -3;
+         end if;
+	     	
+       else
+	      li_res   := -2;
+         -- reversa update anterior
+			update sgf_cuenta
+				set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+				where cod_producto = li_cod_producto
+				and cod_cuenta = ldo_cod_cuenta;
+      end if;
+	           --li_res := a_val_retiro;
+   end if;
+
+   if li_res = 1 then
+		ls_cod_transaccion :='NCT01';
+		gi_oficina := 1; 
+
+	select cod_oficina
+	into gi_oficina
+	from gen_empleado
+	where cod_empleado = a_cod_empleado;
+	if isnull(gi_oficina,0) = 0 then
+         gi_oficina=1;
+	end if;
+	
+   	li_cod_oficina := gi_oficina;
+	 
+   	ll_cod_caja := gy_cod_caja;
+   	ld_fec_movimiento := gd_fecmov;
+   	
+      
+		update sgf_tran
+		set num_transaccion = isnull(num_transaccion,0) + 1
+		where cod_transaccion = ls_cod_transaccion
+		and cod_oficina = li_cod_oficina;
+   	if not found then
+         li_res := -8; --	   ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+      else
+			select num_transaccion
+			into ldo_num_transaccion
+			from sgf_tran
+			where cod_transaccion = ls_cod_transaccion
+			and cod_oficina = li_cod_oficina; 
+			if not found then
+				li_res := -9; -- no existe transaccion
+			end if;
+   	end if;
+
+   end if;
+
+	if li_res = 1 then
+	
+	--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+   --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+   --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+   --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+		gdo_cod_empleado := 99;
+   	ldo_cod_empleado := gdo_empleado;
+		select current_timestamp
+		into ldt_fec_usrmod;
+   	
+		if a_fecha = gd_fecmov then
+	       ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+		else
+          ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+		
+      end if; 
+	
+   --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+   --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+      ll_num_reg := 0;
+   	INSERT INTO sgf_cab_mov_dia  
+         ( cod_oficina,   
+           cod_transaccion,   
+           num_transaccion,   
+           fec_movimiento,   
+           cod_caja,   
+           sts_cab_mov,   
+           cod_firma1,   
+           cod_firma2,   
+           num_documento,   
+           num_libreta,   
+           cod_usrmod,   
+           fec_usrmod,   
+           txt_referencia,   
+           num_cheque )  
+   	VALUES ( li_cod_oficina,   
+           ls_cod_transaccion,   
+           ldo_num_transaccion,   
+           ld_fec_movimiento,   
+           ll_cod_caja,   
+           'A',   
+           li_cod_firma1,   
+           li_cod_firma2,   
+           ldo_num_documento,   
+           ldo_num_libreta,   
+           ldo_cod_empleado,   
+           ldt_fec_usrmod,   
+           ls_txt_referencia,   
+           ls_num_cheque) 
+    	RETURNING  * INTO ll_num_reg ;
+   	if ll_num_reg <= 0 then
+	   	li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+   	end if;
+
+	end if;
+   
+   if li_res = 1 then
+		
+		select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+     	into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+     	from sgf_tran
+	  	where cod_transaccion = ls_cod_transaccion
+	  	and cod_oficina = li_cod_oficina;
+	
+	end if;
+
+   if li_res = 1 then
+      		 
+		 INSERT INTO sgf_det_mov_dia  
+         ( cod_oficina,   
+           cod_transaccion,   
+           num_transaccion,   
+           num_sec,   
+           fec_movimiento,   
+           cod_producto,   
+           cod_cuenta,   
+           val_cheques,   
+           val_efectivo,   
+           sts_mov,   
+           cod_cuenta_contab_db,
+			  cod_cuenta_contab_cr,
+           txt_referencia,
+           cod_usrmod,   
+           fec_usrmod,
+			  val_saldo)  
+    	VALUES ( li_cod_oficina,   
+           ls_cod_transaccion,   
+           ldo_num_transaccion,   
+           1,   
+           ldt_fec_registro,   
+           li_cod_producto,   
+           ldo_cod_cuenta,   
+           ldo_val_cheques,   
+           a_val_retiro,   
+           'A',   
+           ls_cod_cuenta_contable_db,
+			  ls_cod_cuenta_contable_cr,
+           ls_txt_referencia,
+           ldo_cod_empleado,   
+           ldt_fec_usrmod,
+			  ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret)  
+    	RETURNING  * INTO ll_num_reg ;
+   	if ll_num_reg <= 0 then
+	   	li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+   	end if; 
+
+    	
+   end if;
+
+   if li_res = 1 then
+      
+		update sgf_det_mov_dia  
+   	set val_saldo = ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret 
+		where cod_oficina = li_cod_oficina  
+   	and cod_transaccion = ls_cod_transaccion  
+   	and num_transaccion = ldo_num_transaccion  
+   	and num_sec = 1;   
+   	if not found then
+	      li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+        
+    	end if;	
+   end if;
+
+  -- registra comision
+  --ls_cod_transaccion :='NDCTR';
+--	if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+--		
+--		gi_oficina := 1; 
+ --  	li_cod_oficina := gi_oficina;
+	 
+ --  	ll_cod_caja := gy_cod_caja;
+ --  	ld_fec_movimiento := gd_fecmov;
+   	
+      
+--		update sgf_tran
+--		set num_transaccion = isnull(num_transaccion,0) + 1
+--		where cod_transaccion = ls_cod_transaccion
+--		and cod_oficina = li_cod_oficina;
+--   	if not found then
+--         li_res := -8; --	   ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+--      else
+--			select num_transaccion
+--			into ldo_num_transaccion
+--			from sgf_tran
+--			where cod_transaccion = ls_cod_transaccion
+--			and cod_oficina = li_cod_oficina; 
+--			if not found then
+--				li_res := -9; -- no existe transaccion
+--			end if;
+  -- 	end if;
+--
+--   end if;
+
+--	if li_res = 1  and ldo_val_comision + ldo_val_comision_ret > 0 then
+	
+--	--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+--   --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+--   --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+--   --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+--		gdo_cod_empleado := 99;
+--   	ldo_cod_empleado := gdo_empleado;
+--		select current_timestamp
+--		into ldt_fec_usrmod;
+   	
+--		if a_fecha = gd_fecmov then
+--	       ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+--		else
+--          ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+		
+--      end if; 
+	
+--   --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+--   --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+--      ll_num_reg := 0;
+--   	INSERT INTO sgf_cab_mov_dia  
+--         ( cod_oficina,   
+--           cod_transaccion,   
+--           num_transaccion,   
+--           fec_movimiento,   
+--           cod_caja,   
+--           sts_cab_mov,   
+--           cod_firma1,   
+--           cod_firma2,   
+--           num_documento,   
+--           num_libreta,   
+--           cod_usrmod,   
+--           fec_usrmod,   
+--           txt_referencia,   
+--           num_cheque )  
+--   	VALUES ( li_cod_oficina,   
+--           ls_cod_transaccion,   
+--           ldo_num_transaccion,   
+--           ld_fec_movimiento,   
+--           ll_cod_caja,   
+--           'A',   
+--           li_cod_firma1,   
+--           li_cod_firma2,   
+--           ldo_num_documento,   
+--           ldo_num_libreta,   
+--           ldo_cod_empleado,   
+--           ldt_fec_usrmod,   
+--           ls_txt_referencia,   
+--           ls_num_cheque) 
+--    	RETURNING  * INTO ll_num_reg ;
+--   	if ll_num_reg <= 0 then
+--	   	li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+--   	end if;
+
+--	end if;
+   
+--   if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+		
+--		select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+--     	into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+--     	from sgf_tran
+--	  	where cod_transaccion = ls_cod_transaccion
+--	  	and cod_oficina = li_cod_oficina;
+	
+--	end if;
+
+--   if li_res = 1 then
+      		 
+--		 INSERT INTO sgf_det_mov_dia  
+--         ( cod_oficina,   
+--           cod_transaccion,   
+--           num_transaccion,   
+--           num_sec,   
+--           fec_movimiento,   
+--           cod_producto,   
+--           cod_cuenta,   
+--           val_cheques,   
+--           val_efectivo,   
+--           sts_mov,   
+--           cod_cuenta_contab_db,
+--			  cod_cuenta_contab_cr,
+--           txt_referencia,
+--           cod_usrmod,   
+--           fec_usrmod,
+--			  val_saldo)  
+--    	VALUES ( li_cod_oficina,   
+--           ls_cod_transaccion,   
+--           ldo_num_transaccion,   
+--           1,   
+--           ldt_fec_registro,   
+--           li_cod_producto,   
+--           ldo_cod_cuenta,   
+--           ldo_val_cheques,   
+--           ldo_val_comision + ldo_val_comision_ret,   
+--           'A',   
+--           ls_cod_cuenta_contable_db,
+--			  ls_cod_cuenta_contable_cr,
+--           ls_txt_referencia,
+--           ldo_cod_empleado,   
+--           ldt_fec_usrmod,
+--			  ldo_val_saldo)  
+--    	RETURNING  * INTO ll_num_reg ;
+--   	if ll_num_reg <= 0 then
+--	   	li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+--   	end if; 
+
+    	
+--   end if;
+
+--   if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+      
+--		update sgf_det_mov_dia  
+--   	set val_saldo = ldo_val_saldo 
+--		where cod_oficina = li_cod_oficina  
+--   	and cod_transaccion = ls_cod_transaccion  
+--   	and num_transaccion = ldo_num_transaccion  
+--   	and num_sec = 1;   
+--   	if not found then
+--	      li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+        
+--    	end if;	
+--   end if;
+
+   -- REVERSA saldo
+ 	if li_res = -3 or li_res < -7 then
+           update sgf_cuenta
+           set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+               val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+           where cod_producto = a_cod_producto
+           and cod_cuenta = a_cod_cuenta;
+
+	end if;
+   -- reversa act tran
+   if li_res < -8 then
+      update sgf_tran
+		set num_transaccion = isnull(num_transaccion,0) - 1
+		where cod_transaccion = ls_cod_transaccion
+		and cod_oficina = li_cod_oficina;
+   end if;
+   
+
+   --if li_res = 1 then
+--        commit;
+--    else
+--        rollback TO SAVEPOINT my_savepoint;
+--    end if;
+
+   a_sts_retorno := li_res;
+  --if li_res <> 1 then
+--reaise exception '';
+--end if;
+
+				
+--EXCEPTION
+--WHEN raise_exception THEN
+		
+--   ROLLBACK TO s1;   
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric)
+  OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric) TO public;
+GRANT EXECUTE ON FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric) TO postgres;
+
+
+
+
+
+
+-- Function: coop_sp_nct_interna(numeric, numeric, date, numeric)
+
+-- DROP FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric);
+
+CREATE OR REPLACE FUNCTION coop_sp_nct_interna(IN a_cod_producto numeric, IN a_cod_cuenta numeric, IN a_fecha date, IN a_val_retiro numeric, OUT a_sts_retorno numeric)
+  RETURNS numeric AS
+$BODY$
+DECLARE
+
+        --a_cod_empresa ALIAS FOR $1;
+    --a_cod_producto ALIAS FOR $2;
+    --a_cod_cuenta ALIAS FOR $3;
+    --a_fecha ALIAS FOR $4;
+        ldo_cod_cta numeric;
+        li_ano integer := 0;
+    li_mes integer := 0;
+    li_nro_reg integer := 0;
+    ldo_val_saldo numeric;
+    ldo_val_creditos numeric;
+    ldo_val_debitos numeric;
+    ldo_val_efectivo numeric;
+    ldo_val_cheques numeric;
+   ldo_val_disponible numeric;
+    ld_fecha date;
+    ld_fec_ini date;
+	gi_oficina numeric;
+	li_cod_oficina numeric;
+	ldo_num_transaccion numeric;
+	ll_num_reg numeric;
+	
+        regs record;
+        li_res numeric;
+    gd_fecmov date;
+    gy_cod_caja numeric;
+    gdo_cod_empleado numeric;
+     ls_sts_tarjeta text;
+     ls_sts_apecie text;
+     li_cod_producto numeric;
+     ldo_cod_cuenta numeric;
+     ldo_val_efe numeric;
+     ldo_val_chq numeric;
+     ls_cod_cuenta_contable_db text;
+     ls_cod_cuenta_contable_cr text;
+     ls_cod_cuenta_contable_db_chq text;
+      ls_cod_cuenta_contable_cr_chq text;
+     ld_fec_movimiento date;
+     ls_cod_transaccion text;
+     ldt_fec_usrmod timestamp without time zone;
+      ldt_fec_registro timestamp without time zone;
+     ldo_val_aut numeric;
+     ll_cod_caja numeric;  
+     gdo_empleado numeric;
+     a_cod_empleado numeric;        
+           li_cod_firma1 numeric;  
+           li_cod_firma2 numeric;   
+           ldo_num_documento numeric;  
+           ldo_num_libreta numeric;   
+           ldo_cod_empleado numeric;   
+             
+           ls_txt_referencia text; 
+           ls_num_cheque numeric;
+     
+     
+    ldo_val_atm_ret_con_redlocal numeric;   
+    ldo_val_atm_ret_con_banred  numeric;    
+    ldo_val_atm_ret_con_conecta  numeric;    
+    ldo_val_atm_ret_con_otrared  numeric;    
+    ldo_val_atm_ret_con_iva_redlocal  numeric;    
+    ldo_val_atm_ret_con_iva_banred   numeric;    
+    ldo_val_atm_ret_con_iva_conecta   numeric;    
+    ldo_val_atm_ret_con_iva_otrared   numeric; 
+    ldo_val_comision  numeric;
+    ldo_val_atm_ret_redlocal numeric;   
+    ldo_val_atm_ret_banred  numeric;    
+    ldo_val_atm_ret_conecta  numeric;    
+    ldo_val_atm_ret_otrared  numeric;    
+    ldo_val_atm_ret_iva_redlocal  numeric;    
+    ldo_val_atm_ret_iva_banred   numeric;    
+    ldo_val_atm_ret_iva_conecta   numeric;    
+    ldo_val_atm_ret_iva_otrared   numeric; 
+    ldo_val_comision_ret  numeric;
+BEGIN
+  
+   if isnull(a_val_retiro,-1) = -1 then 
+	   a_val_retiro :=0;
+	end if;
+
+  a_cod_empleado := 99;
+   
+   -- comision por retiro con consulta impresa
+   ldo_val_atm_ret_con_redlocal := 0;   
+          ldo_val_atm_ret_con_banred := 0;    
+          ldo_val_atm_ret_con_conecta := 0;    
+          ldo_val_atm_ret_con_otrared := 0;    
+          ldo_val_atm_ret_con_iva_redlocal := 0;    
+          ldo_val_atm_ret_con_iva_banred  := 0;    
+          ldo_val_atm_ret_con_iva_conecta  := 0;    
+          ldo_val_atm_ret_con_iva_otrared  := 0; 
+     ldo_val_atm_ret_redlocal := 0;   
+          ldo_val_atm_ret_banred := 0;    
+          ldo_val_atm_ret_conecta := 0;    
+          ldo_val_atm_ret_otrared := 0;    
+          ldo_val_atm_ret_iva_redlocal := 0;    
+          ldo_val_atm_ret_iva_banred  := 0;    
+          ldo_val_atm_ret_iva_conecta  := 0;    
+          ldo_val_atm_ret_iva_otrared  := 0;      
+   ldo_val_comision := 0;
+   ldo_val_comision_ret := 0;
+   li_res := 1;
+   
+   if li_res = 1  then
+        SELECT val_atm_ret_con_redlocal,   
+          val_atm_ret_con_banred,   
+          val_atm_ret_con_conecta,   
+          val_atm_ret_con_otrared,   
+          val_atm_ret_con_iva_redlocal,   
+          val_atm_ret_con_iva_banred,   
+          val_atm_ret_con_iva_conecta,   
+          val_atm_ret_con_iva_otrared  ,
+          val_atm_ret_redlocal,   
+          val_atm_ret_banred,   
+          val_atm_ret_conecta,   
+          val_atm_ret_otrared,   
+          val_atm_ret_iva_redlocal,   
+          val_atm_ret_iva_banred,   
+          val_atm_ret_iva_conecta,   
+          val_atm_ret_iva_otrared  
+       into
+          ldo_val_atm_ret_con_redlocal,   
+          ldo_val_atm_ret_con_banred,   
+          ldo_val_atm_ret_con_conecta,   
+          ldo_val_atm_ret_con_otrared,   
+          ldo_val_atm_ret_con_iva_redlocal,   
+          ldo_val_atm_ret_con_iva_banred,   
+          ldo_val_atm_ret_con_iva_conecta,   
+          ldo_val_atm_ret_con_iva_otrared  ,
+          ldo_val_atm_ret_redlocal,   
+          ldo_val_atm_ret_banred,   
+          ldo_val_atm_ret_conecta,   
+          ldo_val_atm_ret_otrared,   
+          ldo_val_atm_ret_iva_redlocal,   
+          ldo_val_atm_ret_iva_banred,   
+          ldo_val_atm_ret_iva_conecta,   
+          ldo_val_atm_ret_iva_otrared
+    	FROM sgf_prod_comision  
+    	where cod_producto = a_cod_producto;
+      if found  then
+        
+        ldo_val_comision :=  0; --ldo_val_atm_ret_otrared;
+           
+     end if;
+   end if;
+    ldo_val_comision :=  0;
+   ldo_val_comision_ret := 0;
+   
+   if li_res = 1 then 
+      
+		select fec_mov
+		into gd_fecmov
+		from gen_empresa
+		where cod_empresa = 1;
+      if not found then
+         li_res := -4; -- no pudo obtener la fecha
+      else
+         gy_cod_caja := 99;
+
+			select sts_apecie
+			into ls_sts_apecie
+			from sgf_caja, gen_empleado
+			where sgf_caja.cod_caja = gy_cod_caja
+			and sgf_caja.cod_empleado = gen_empleado.cod_empleado;
+			if not found then
+         	li_res := -5; -- no existe caja
+      	
+			end if;
+      end if;
+   end if;
+
+   if li_res = 1 then
+      li_cod_producto := a_cod_producto;
+      ldo_cod_cuenta := a_cod_cuenta;
+      ldo_val_efe := a_val_retiro + ldo_val_comision + ldo_val_comision_ret;
+      ldo_val_chq := 0;
+      ldo_val_efectivo := ldo_val_efe;
+      ldo_val_cheques := ldo_val_chq;
+
+		update sgf_cuenta
+		set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+		where cod_producto = li_cod_producto
+		and cod_cuenta = ldo_cod_cuenta;
+
+		IF not found THEN	
+			li_res := -6; --	ls_txt_error="No es posible actualizar el saldo en la cuenta"			
+		else
+			ldo_val_aut := 0;
+
+			select val_inicial_apertura
+			into ldo_val_aut
+			from sgf_cuenta
+			where cod_producto = li_cod_producto
+			and cod_cuenta = ldo_cod_cuenta;
+			if ldo_val_aut < 0 then
+			   li_res := -7; --				ls_txt_error="El monto a Retirar excede el limite permitido"
+			 
+            -- reversa
+	         update sgf_cuenta
+				set val_inicial_apertura = isnull(val_inicial_apertura,0) - ldo_val_efe - ldo_val_chq
+				where cod_producto = li_cod_producto
+				and cod_cuenta = ldo_cod_cuenta;
+
+			end if;
+		end if;
+
+   end if;
+
+   if li_res = 1 then
+       ldo_val_saldo := 0;
+       
+       update sgf_cuenta
+         set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+           val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+       where cod_producto = a_cod_producto
+       and cod_cuenta = a_cod_cuenta;
+       IF found THEN
+            
+         select val_saldo, val_efectivo
+         into ldo_val_saldo, ldo_val_disponible
+         from sgf_cuenta
+         where cod_producto = a_cod_producto
+         and cod_cuenta = a_cod_cuenta;
+       
+
+         if isnull(ldo_val_saldo,-1) = -1 or ldo_val_saldo < 0 then
+           li_res := -3;
+         end if;
+   
+         if isnull(ldo_val_disponible,-1) = -1 or ldo_val_disponible < 0 then
+            li_res := -3;
+         end if;
+	     	
+       else
+	      li_res   := -2;
+         -- reversa update anterior
+			update sgf_cuenta
+				set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+				where cod_producto = li_cod_producto
+				and cod_cuenta = ldo_cod_cuenta;
+      end if;
+	           --li_res := a_val_retiro;
+   end if;
+
+   if li_res = 1 then
+		ls_cod_transaccion :='NCT01';
+		gi_oficina := 1; 
+
+	select cod_oficina
+	into gi_oficina
+	from gen_empleado
+	where cod_empleado = a_cod_empleado;
+	if isnull(gi_oficina,0) = 0 then
+         gi_oficina=1;
+	end if;
+	
+   	li_cod_oficina := gi_oficina;
+	 
+   	ll_cod_caja := gy_cod_caja;
+   	ld_fec_movimiento := gd_fecmov;
+   	
+      
+		update sgf_tran
+		set num_transaccion = isnull(num_transaccion,0) + 1
+		where cod_transaccion = ls_cod_transaccion
+		and cod_oficina = li_cod_oficina;
+   	if not found then
+         li_res := -8; --	   ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+      else
+			select num_transaccion
+			into ldo_num_transaccion
+			from sgf_tran
+			where cod_transaccion = ls_cod_transaccion
+			and cod_oficina = li_cod_oficina; 
+			if not found then
+				li_res := -9; -- no existe transaccion
+			end if;
+   	end if;
+
+   end if;
+
+	if li_res = 1 then
+	
+	--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+   --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+   --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+   --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+		gdo_cod_empleado := 99;
+   	ldo_cod_empleado := gdo_empleado;
+		select current_timestamp
+		into ldt_fec_usrmod;
+   	
+		if a_fecha = gd_fecmov then
+	       ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+		else
+          ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+		
+      end if; 
+	
+   --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+   --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+      ll_num_reg := 0;
+   	INSERT INTO sgf_cab_mov_dia  
+         ( cod_oficina,   
+           cod_transaccion,   
+           num_transaccion,   
+           fec_movimiento,   
+           cod_caja,   
+           sts_cab_mov,   
+           cod_firma1,   
+           cod_firma2,   
+           num_documento,   
+           num_libreta,   
+           cod_usrmod,   
+           fec_usrmod,   
+           txt_referencia,   
+           num_cheque )  
+   	VALUES ( li_cod_oficina,   
+           ls_cod_transaccion,   
+           ldo_num_transaccion,   
+           ld_fec_movimiento,   
+           ll_cod_caja,   
+           'A',   
+           li_cod_firma1,   
+           li_cod_firma2,   
+           ldo_num_documento,   
+           ldo_num_libreta,   
+           ldo_cod_empleado,   
+           ldt_fec_usrmod,   
+           ls_txt_referencia,   
+           ls_num_cheque) 
+    	RETURNING  * INTO ll_num_reg ;
+   	if ll_num_reg <= 0 then
+	   	li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+   	end if;
+
+	end if;
+   
+   if li_res = 1 then
+		
+		select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+     	into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+     	from sgf_tran
+	  	where cod_transaccion = ls_cod_transaccion
+	  	and cod_oficina = li_cod_oficina;
+	
+	end if;
+
+   if li_res = 1 then
+      		 
+		 INSERT INTO sgf_det_mov_dia  
+         ( cod_oficina,   
+           cod_transaccion,   
+           num_transaccion,   
+           num_sec,   
+           fec_movimiento,   
+           cod_producto,   
+           cod_cuenta,   
+           val_cheques,   
+           val_efectivo,   
+           sts_mov,   
+           cod_cuenta_contab_db,
+			  cod_cuenta_contab_cr,
+           txt_referencia,
+           cod_usrmod,   
+           fec_usrmod,
+			  val_saldo)  
+    	VALUES ( li_cod_oficina,   
+           ls_cod_transaccion,   
+           ldo_num_transaccion,   
+           1,   
+           ldt_fec_registro,   
+           li_cod_producto,   
+           ldo_cod_cuenta,   
+           ldo_val_cheques,   
+           a_val_retiro,   
+           'A',   
+           ls_cod_cuenta_contable_db,
+			  ls_cod_cuenta_contable_cr,
+           ls_txt_referencia,
+           ldo_cod_empleado,   
+           ldt_fec_usrmod,
+			  ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret)  
+    	RETURNING  * INTO ll_num_reg ;
+   	if ll_num_reg <= 0 then
+	   	li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+   	end if; 
+
+    	
+   end if;
+
+   if li_res = 1 then
+      
+		update sgf_det_mov_dia  
+   	set val_saldo = ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret 
+		where cod_oficina = li_cod_oficina  
+   	and cod_transaccion = ls_cod_transaccion  
+   	and num_transaccion = ldo_num_transaccion  
+   	and num_sec = 1;   
+   	if not found then
+	      li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+        
+    	end if;	
+   end if;
+
+  -- registra comision
+  --ls_cod_transaccion :='NDCTR';
+--	if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+--		
+--		gi_oficina := 1; 
+ --  	li_cod_oficina := gi_oficina;
+	 
+ --  	ll_cod_caja := gy_cod_caja;
+ --  	ld_fec_movimiento := gd_fecmov;
+   	
+      
+--		update sgf_tran
+--		set num_transaccion = isnull(num_transaccion,0) + 1
+--		where cod_transaccion = ls_cod_transaccion
+--		and cod_oficina = li_cod_oficina;
+--   	if not found then
+--         li_res := -8; --	   ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+--      else
+--			select num_transaccion
+--			into ldo_num_transaccion
+--			from sgf_tran
+--			where cod_transaccion = ls_cod_transaccion
+--			and cod_oficina = li_cod_oficina; 
+--			if not found then
+--				li_res := -9; -- no existe transaccion
+--			end if;
+  -- 	end if;
+--
+--   end if;
+
+--	if li_res = 1  and ldo_val_comision + ldo_val_comision_ret > 0 then
+	
+--	--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+--   --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+--   --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+--   --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+--		gdo_cod_empleado := 99;
+--   	ldo_cod_empleado := gdo_empleado;
+--		select current_timestamp
+--		into ldt_fec_usrmod;
+   	
+--		if a_fecha = gd_fecmov then
+--	       ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+--		else
+--          ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+		
+--      end if; 
+	
+--   --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+--   --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+--      ll_num_reg := 0;
+--   	INSERT INTO sgf_cab_mov_dia  
+--         ( cod_oficina,   
+--           cod_transaccion,   
+--           num_transaccion,   
+--           fec_movimiento,   
+--           cod_caja,   
+--           sts_cab_mov,   
+--           cod_firma1,   
+--           cod_firma2,   
+--           num_documento,   
+--           num_libreta,   
+--           cod_usrmod,   
+--           fec_usrmod,   
+--           txt_referencia,   
+--           num_cheque )  
+--   	VALUES ( li_cod_oficina,   
+--           ls_cod_transaccion,   
+--           ldo_num_transaccion,   
+--           ld_fec_movimiento,   
+--           ll_cod_caja,   
+--           'A',   
+--           li_cod_firma1,   
+--           li_cod_firma2,   
+--           ldo_num_documento,   
+--           ldo_num_libreta,   
+--           ldo_cod_empleado,   
+--           ldt_fec_usrmod,   
+--           ls_txt_referencia,   
+--           ls_num_cheque) 
+--    	RETURNING  * INTO ll_num_reg ;
+--   	if ll_num_reg <= 0 then
+--	   	li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+--   	end if;
+
+--	end if;
+   
+--   if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+		
+--		select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+--     	into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+--     	from sgf_tran
+--	  	where cod_transaccion = ls_cod_transaccion
+--	  	and cod_oficina = li_cod_oficina;
+	
+--	end if;
+
+--   if li_res = 1 then
+      		 
+--		 INSERT INTO sgf_det_mov_dia  
+--         ( cod_oficina,   
+--           cod_transaccion,   
+--           num_transaccion,   
+--           num_sec,   
+--           fec_movimiento,   
+--           cod_producto,   
+--           cod_cuenta,   
+--           val_cheques,   
+--           val_efectivo,   
+--           sts_mov,   
+--           cod_cuenta_contab_db,
+--			  cod_cuenta_contab_cr,
+--           txt_referencia,
+--           cod_usrmod,   
+--           fec_usrmod,
+--			  val_saldo)  
+--    	VALUES ( li_cod_oficina,   
+--           ls_cod_transaccion,   
+--           ldo_num_transaccion,   
+--           1,   
+--           ldt_fec_registro,   
+--           li_cod_producto,   
+--           ldo_cod_cuenta,   
+--           ldo_val_cheques,   
+--           ldo_val_comision + ldo_val_comision_ret,   
+--           'A',   
+--           ls_cod_cuenta_contable_db,
+--			  ls_cod_cuenta_contable_cr,
+--           ls_txt_referencia,
+--           ldo_cod_empleado,   
+--           ldt_fec_usrmod,
+--			  ldo_val_saldo)  
+--    	RETURNING  * INTO ll_num_reg ;
+--   	if ll_num_reg <= 0 then
+--	   	li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+      
+--   	end if; 
+
+    	
+--   end if;
+
+--   if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+      
+--		update sgf_det_mov_dia  
+--   	set val_saldo = ldo_val_saldo 
+--		where cod_oficina = li_cod_oficina  
+--   	and cod_transaccion = ls_cod_transaccion  
+--   	and num_transaccion = ldo_num_transaccion  
+--   	and num_sec = 1;   
+--   	if not found then
+--	      li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+        
+--    	end if;	
+--   end if;
+
+   -- REVERSA saldo
+ 	if li_res = -3 or li_res < -7 then
+           update sgf_cuenta
+           set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+               val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+           where cod_producto = a_cod_producto
+           and cod_cuenta = a_cod_cuenta;
+
+	end if;
+   -- reversa act tran
+   if li_res < -8 then
+      update sgf_tran
+		set num_transaccion = isnull(num_transaccion,0) - 1
+		where cod_transaccion = ls_cod_transaccion
+		and cod_oficina = li_cod_oficina;
+   end if;
+   
+
+   --if li_res = 1 then
+--        commit;
+--    else
+--        rollback TO SAVEPOINT my_savepoint;
+--    end if;
+
+   a_sts_retorno := li_res;
+  --if li_res <> 1 then
+--reaise exception '';
+--end if;
+
+				
+--EXCEPTION
+--WHEN raise_exception THEN
+		
+--   ROLLBACK TO s1;   
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric)
+  OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric) TO public;
+GRANT EXECUTE ON FUNCTION coop_sp_nct_interna(numeric, numeric, date, numeric) TO postgres;
+
+
+
+
+
+-- Function: coop_sp_ndt01(numeric, numeric, date, numeric)
+
+-- DROP FUNCTION coop_sp_ndt01(numeric, numeric, date, numeric);
+
+CREATE OR REPLACE FUNCTION coop_sp_ndt01(IN a_cod_producto numeric, IN a_cod_cuenta numeric, IN a_fecha date, IN a_val_retiro numeric, OUT a_sts_retorno numeric)
+  RETURNS numeric AS
+$BODY$
+DECLARE
+
+--a_cod_empresa ALIAS FOR $1;
+--a_cod_producto ALIAS FOR $2;
+--a_cod_cuenta ALIAS FOR $3;
+--a_fecha ALIAS FOR $4;
+ldo_cod_cta numeric;
+li_ano integer := 0;
+li_mes integer := 0;
+li_nro_reg integer := 0;
+ldo_val_saldo numeric;
+ldo_val_creditos numeric;
+ldo_val_debitos numeric;
+ldo_val_efectivo numeric;
+ldo_val_cheques numeric;
+ldo_val_disponible numeric;
+ld_fecha date;
+ld_fec_ini date;
+gi_oficina numeric;
+li_cod_oficina numeric;
+ldo_num_transaccion numeric;
+ll_num_reg numeric;
+
+regs record;
+li_res numeric;
+gd_fecmov date;
+gy_cod_caja numeric;
+gdo_cod_empleado numeric;
+ls_sts_tarjeta text;
+ls_sts_apecie text;
+li_cod_producto numeric;
+ldo_cod_cuenta numeric;
+ldo_val_efe numeric;
+ldo_val_chq numeric;
+ls_cod_cuenta_contable_db text;
+ls_cod_cuenta_contable_cr text;
+ls_cod_cuenta_contable_db_chq text;
+ls_cod_cuenta_contable_cr_chq text;
+ld_fec_movimiento date;
+ls_cod_transaccion text;
+ldt_fec_usrmod timestamp without time zone;
+ldt_fec_registro timestamp without time zone;
+ldo_val_aut numeric;
+ll_cod_caja numeric;
+gdo_empleado numeric;
+a_cod_empleado numeric;
+li_cod_firma1 numeric;
+li_cod_firma2 numeric;
+ldo_num_documento numeric;
+ldo_num_libreta numeric;
+ldo_cod_empleado numeric;
+
+ls_txt_referencia text;
+ls_num_cheque numeric;
+
+
+ldo_val_atm_ret_con_redlocal numeric;
+ldo_val_atm_ret_con_banred numeric;
+ldo_val_atm_ret_con_conecta numeric;
+ldo_val_atm_ret_con_otrared numeric;
+ldo_val_atm_ret_con_iva_redlocal numeric;
+ldo_val_atm_ret_con_iva_banred numeric;
+ldo_val_atm_ret_con_iva_conecta numeric;
+ldo_val_atm_ret_con_iva_otrared numeric;
+ldo_val_comision numeric;
+ldo_val_atm_ret_redlocal numeric;
+ldo_val_atm_ret_banred numeric;
+ldo_val_atm_ret_conecta numeric;
+ldo_val_atm_ret_otrared numeric;
+ldo_val_atm_ret_iva_redlocal numeric;
+ldo_val_atm_ret_iva_banred numeric;
+ldo_val_atm_ret_iva_conecta numeric;
+ldo_val_atm_ret_iva_otrared numeric;
+ldo_val_comision_ret numeric;
+BEGIN
+
+if isnull(a_val_retiro,-1) = -1 then
+a_val_retiro :=0;
+end if;
+
+a_cod_empleado := 99;
+
+-- comision por retiro con consulta impresa
+ldo_val_atm_ret_con_redlocal := 0;
+ldo_val_atm_ret_con_banred := 0;
+ldo_val_atm_ret_con_conecta := 0;
+ldo_val_atm_ret_con_otrared := 0;
+ldo_val_atm_ret_con_iva_redlocal := 0;
+ldo_val_atm_ret_con_iva_banred := 0;
+ldo_val_atm_ret_con_iva_conecta := 0;
+ldo_val_atm_ret_con_iva_otrared := 0;
+ldo_val_atm_ret_redlocal := 0;
+ldo_val_atm_ret_banred := 0;
+ldo_val_atm_ret_conecta := 0;
+ldo_val_atm_ret_otrared := 0;
+ldo_val_atm_ret_iva_redlocal := 0;
+ldo_val_atm_ret_iva_banred := 0;
+ldo_val_atm_ret_iva_conecta := 0;
+ldo_val_atm_ret_iva_otrared := 0;
+ldo_val_comision := 0;
+ldo_val_comision_ret := 0;
+li_res := 1;
+
+if li_res = 1 then
+SELECT val_atm_ret_con_redlocal,
+val_atm_ret_con_banred,
+val_atm_ret_con_conecta,
+val_atm_ret_con_otrared,
+val_atm_ret_con_iva_redlocal,
+val_atm_ret_con_iva_banred,
+val_atm_ret_con_iva_conecta,
+val_atm_ret_con_iva_otrared ,
+val_atm_ret_redlocal,
+val_atm_ret_banred,
+val_atm_ret_conecta,
+val_atm_ret_otrared,
+val_atm_ret_iva_redlocal,
+val_atm_ret_iva_banred,
+val_atm_ret_iva_conecta,
+val_atm_ret_iva_otrared
+into
+ldo_val_atm_ret_con_redlocal,
+ldo_val_atm_ret_con_banred,
+ldo_val_atm_ret_con_conecta,
+ldo_val_atm_ret_con_otrared,
+ldo_val_atm_ret_con_iva_redlocal,
+ldo_val_atm_ret_con_iva_banred,
+ldo_val_atm_ret_con_iva_conecta,
+ldo_val_atm_ret_con_iva_otrared ,
+ldo_val_atm_ret_redlocal,
+ldo_val_atm_ret_banred,
+ldo_val_atm_ret_conecta,
+ldo_val_atm_ret_otrared,
+ldo_val_atm_ret_iva_redlocal,
+ldo_val_atm_ret_iva_banred,
+ldo_val_atm_ret_iva_conecta,
+ldo_val_atm_ret_iva_otrared
+FROM sgf_prod_comision
+where cod_producto = a_cod_producto;
+if found then
+
+ldo_val_comision := ldo_val_atm_ret_otrared;
+
+end if;
+end if;
+ldo_val_comision := 0;
+ldo_val_comision_ret := 0;
+
+if li_res = 1 then
+
+select fec_mov
+into gd_fecmov
+from gen_empresa
+where cod_empresa = 1;
+if not found then
+li_res := -4; -- no pudo obtener la fecha
+else
+gy_cod_caja := 99;
+
+select sts_apecie
+into ls_sts_apecie
+from sgf_caja, gen_empleado
+where sgf_caja.cod_caja = gy_cod_caja
+and sgf_caja.cod_empleado = gen_empleado.cod_empleado;
+if not found then
+li_res := -5; -- no existe caja
+
+end if;
+end if;
+end if;
+
+if li_res = 1 then
+li_cod_producto := a_cod_producto;
+ldo_cod_cuenta := a_cod_cuenta;
+ldo_val_efe := a_val_retiro + ldo_val_comision + ldo_val_comision_ret;
+ldo_val_chq := 0;
+ldo_val_efectivo := ldo_val_efe;
+ldo_val_cheques := ldo_val_chq;
+
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) - ldo_val_efe - ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+
+IF not found THEN
+li_res := -6; -- ls_txt_error="No es posible actualizar el saldo en la cuenta"
+else
+ldo_val_aut := 0;
+
+select val_inicial_apertura
+into ldo_val_aut
+from sgf_cuenta
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+if ldo_val_aut < 0 then
+li_res := -7; -- ls_txt_error="El monto a Retirar excede el limite permitido"
+
+-- reversa
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+
+end if;
+end if;
+
+end if;
+
+if li_res = 1 then
+ldo_val_saldo := 0;
+
+update sgf_cuenta
+set val_saldo = val_saldo - (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+val_efectivo = val_efectivo - (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+where cod_producto = a_cod_producto
+and cod_cuenta = a_cod_cuenta;
+IF found THEN
+
+select val_saldo, val_efectivo
+into ldo_val_saldo, ldo_val_disponible
+from sgf_cuenta
+where cod_producto = a_cod_producto
+and cod_cuenta = a_cod_cuenta;
+
+
+if isnull(ldo_val_saldo,-1) = -1 or ldo_val_saldo < 0 then
+li_res := -3;
+end if;
+
+if isnull(ldo_val_disponible,-1) = -1 or ldo_val_disponible < 0 then
+li_res := -3;
+end if;
+
+else
+li_res := -2;
+-- reversa update anterior
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+end if;
+--li_res := a_val_retiro;
+end if;
+
+if li_res = 1 then
+ls_cod_transaccion :='NDT01';
+gi_oficina := 1;
+
+select cod_oficina
+into gi_oficina
+from gen_empleado
+where cod_empleado = a_cod_empleado;
+if isnull(gi_oficina,0) = 0 then
+gi_oficina=1;
+end if;
+
+li_cod_oficina := gi_oficina;
+
+ll_cod_caja := gy_cod_caja;
+ld_fec_movimiento := gd_fecmov;
+
+
+update sgf_tran
+set num_transaccion = isnull(num_transaccion,0) + 1
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+if not found then
+li_res := -8; -- ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+else
+select num_transaccion
+into ldo_num_transaccion
+from sgf_tran
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+if not found then
+li_res := -9; -- no existe transaccion
+end if;
+end if;
+
+end if;
+
+if li_res = 1 then
+
+--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+--li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+--ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+--ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+gdo_cod_empleado := 99;
+ldo_cod_empleado := gdo_empleado;
+select current_timestamp
+into ldt_fec_usrmod;
+
+if a_fecha = gd_fecmov then
+ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+else
+ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+
+end if;
+
+--ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+--ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+ll_num_reg := 0;
+INSERT INTO sgf_cab_mov_dia
+( cod_oficina,
+cod_transaccion,
+num_transaccion,
+fec_movimiento,
+cod_caja,
+sts_cab_mov,
+cod_firma1,
+cod_firma2,
+num_documento,
+num_libreta,
+cod_usrmod,
+fec_usrmod,
+txt_referencia,
+num_cheque )
+VALUES ( li_cod_oficina,
+ls_cod_transaccion,
+ldo_num_transaccion,
+ld_fec_movimiento,
+ll_cod_caja,
+'A',
+li_cod_firma1,
+li_cod_firma2,
+ldo_num_documento,
+ldo_num_libreta,
+ldo_cod_empleado,
+ldt_fec_usrmod,
+ls_txt_referencia,
+ls_num_cheque)
+RETURNING * INTO ll_num_reg ;
+if ll_num_reg <= 0 then
+li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+
+end if;
+
+if li_res = 1 then
+
+select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+from sgf_tran
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+
+end if;
+
+if li_res = 1 then
+
+INSERT INTO sgf_det_mov_dia
+( cod_oficina,
+cod_transaccion,
+num_transaccion,
+num_sec,
+fec_movimiento,
+cod_producto,
+cod_cuenta,
+val_cheques,
+val_efectivo,
+sts_mov,
+cod_cuenta_contab_db,
+cod_cuenta_contab_cr,
+txt_referencia,
+cod_usrmod,
+fec_usrmod,
+val_saldo)
+VALUES ( li_cod_oficina,
+ls_cod_transaccion,
+ldo_num_transaccion,
+1,
+ldt_fec_registro,
+li_cod_producto,
+ldo_cod_cuenta,
+ldo_val_cheques,
+a_val_retiro,
+'A',
+ls_cod_cuenta_contable_db,
+ls_cod_cuenta_contable_cr,
+ls_txt_referencia,
+ldo_cod_empleado,
+ldt_fec_usrmod,
+ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret)
+RETURNING * INTO ll_num_reg ;
+if ll_num_reg <= 0 then
+li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+
+
+end if;
+
+if li_res = 1 then
+
+update sgf_det_mov_dia
+set val_saldo = ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret
+where cod_oficina = li_cod_oficina
+and cod_transaccion = ls_cod_transaccion
+and num_transaccion = ldo_num_transaccion
+and num_sec = 1;
+if not found then
+li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+end if;
+
+-- registra comision
+--ls_cod_transaccion :='NDCTR';
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+--
+-- gi_oficina := 1;
+-- li_cod_oficina := gi_oficina;
+--
+-- ll_cod_caja := gy_cod_caja;
+-- ld_fec_movimiento := gd_fecmov;
+
+
+-- update sgf_tran
+-- set num_transaccion = isnull(num_transaccion,0) + 1
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+-- if not found then
+-- li_res := -8; -- ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+-- else
+-- select num_transaccion
+-- into ldo_num_transaccion
+-- from sgf_tran
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+-- if not found then
+-- li_res := -9; -- no existe transaccion
+-- end if;
+-- end if;
+
+-- end if;
+
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- --li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+-- --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+-- --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+-- --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+-- gdo_cod_empleado := 99;
+-- ldo_cod_empleado := gdo_empleado;
+-- select current_timestamp
+-- into ldt_fec_usrmod;
+
+-- if a_fecha = gd_fecmov then
+-- ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+-- else
+-- ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+
+-- end if;
+
+-- --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+-- --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+-- ll_num_reg := 0;
+-- INSERT INTO sgf_cab_mov_dia
+-- ( cod_oficina,
+-- cod_transaccion,
+-- num_transaccion,
+-- fec_movimiento,
+-- cod_caja,
+-- sts_cab_mov,
+-- cod_firma1,
+-- cod_firma2,
+-- num_documento,
+-- num_libreta,
+-- cod_usrmod,
+-- fec_usrmod,
+-- txt_referencia,
+-- num_cheque )
+-- VALUES ( li_cod_oficina,
+-- ls_cod_transaccion,
+-- ldo_num_transaccion,
+-- ld_fec_movimiento,
+-- ll_cod_caja,
+-- 'A',
+-- li_cod_firma1,
+-- li_cod_firma2,
+-- ldo_num_documento,
+-- ldo_num_libreta,
+-- ldo_cod_empleado,
+-- ldt_fec_usrmod,
+-- ls_txt_referencia,
+-- ls_num_cheque)
+-- RETURNING * INTO ll_num_reg ;
+-- if ll_num_reg <= 0 then
+-- li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+-- end if;
+
+-- end if;
+
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+-- into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+-- from sgf_tran
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+
+-- end if;
+
+-- if li_res = 1 then
+
+-- INSERT INTO sgf_det_mov_dia
+-- ( cod_oficina,
+-- cod_transaccion,
+-- num_transaccion,
+-- num_sec,
+-- fec_movimiento,
+-- cod_producto,
+-- cod_cuenta,
+-- val_cheques,
+-- val_efectivo,
+-- sts_mov,
+-- cod_cuenta_contab_db,
+-- cod_cuenta_contab_cr,
+-- txt_referencia,
+-- cod_usrmod,
+-- fec_usrmod,
+-- val_saldo)
+-- VALUES ( li_cod_oficina,
+-- ls_cod_transaccion,
+-- ldo_num_transaccion,
+-- 1,
+-- ldt_fec_registro,
+-- li_cod_producto,
+-- ldo_cod_cuenta,
+-- ldo_val_cheques,
+-- ldo_val_comision + ldo_val_comision_ret,
+-- 'A',
+-- ls_cod_cuenta_contable_db,
+-- ls_cod_cuenta_contable_cr,
+-- ls_txt_referencia,
+-- ldo_cod_empleado,
+-- ldt_fec_usrmod,
+-- ldo_val_saldo)
+-- RETURNING * INTO ll_num_reg ;
+-- if ll_num_reg <= 0 then
+-- li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+--
+-- end if;
+
+
+-- end if;
+
+--if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- update sgf_det_mov_dia
+-- set val_saldo = ldo_val_saldo
+-- where cod_oficina = li_cod_oficina
+-- and cod_transaccion = ls_cod_transaccion
+-- and num_transaccion = ldo_num_transaccion
+-- and num_sec = 1;
+-- if not found then
+-- li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+--
+-- end if;
+-- end if;
+
+-- REVERSA saldo
+-- if li_res = -3 or li_res < -7 then
+-- update sgf_cuenta
+-- set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+-- val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+-- where cod_producto = a_cod_producto
+-- and cod_cuenta = a_cod_cuenta;
+
+-- end if;
+-- reversa act tran
+if li_res < -8 then
+update sgf_tran
+set num_transaccion = isnull(num_transaccion,0) - 1
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+end if;
+
+
+--if li_res = 1 then
+-- commit;
+-- else
+-- rollback TO SAVEPOINT my_savepoint;
+-- end if;
+
+a_sts_retorno := li_res;
+--if li_res <> 1 then
+--reaise exception '';
+--end if;
+
+
+--EXCEPTION
+--WHEN raise_exception THEN
+
+-- ROLLBACK TO s1;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION coop_sp_ndt01(numeric, numeric, date, numeric)
+  OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION coop_sp_ndt01(numeric, numeric, date, numeric) TO public;
+GRANT EXECUTE ON FUNCTION coop_sp_ndt01(numeric, numeric, date, numeric) TO postgres;
+
+
+
+
+
+-- Function: coop_sp_ndt_interna(numeric, numeric, date, numeric)
+
+-- DROP FUNCTION coop_sp_ndt_interna(numeric, numeric, date, numeric);
+
+CREATE OR REPLACE FUNCTION coop_sp_ndt_interna(IN a_cod_producto numeric, IN a_cod_cuenta numeric, IN a_fecha date, IN a_val_retiro numeric, OUT a_sts_retorno numeric)
+  RETURNS numeric AS
+$BODY$
+DECLARE
+
+--a_cod_empresa ALIAS FOR $1;
+--a_cod_producto ALIAS FOR $2;
+--a_cod_cuenta ALIAS FOR $3;
+--a_fecha ALIAS FOR $4;
+ldo_cod_cta numeric;
+li_ano integer := 0;
+li_mes integer := 0;
+li_nro_reg integer := 0;
+ldo_val_saldo numeric;
+ldo_val_creditos numeric;
+ldo_val_debitos numeric;
+ldo_val_efectivo numeric;
+ldo_val_cheques numeric;
+ldo_val_disponible numeric;
+ld_fecha date;
+ld_fec_ini date;
+gi_oficina numeric;
+li_cod_oficina numeric;
+ldo_num_transaccion numeric;
+ll_num_reg numeric;
+
+regs record;
+li_res numeric;
+gd_fecmov date;
+gy_cod_caja numeric;
+gdo_cod_empleado numeric;
+ls_sts_tarjeta text;
+ls_sts_apecie text;
+li_cod_producto numeric;
+ldo_cod_cuenta numeric;
+ldo_val_efe numeric;
+ldo_val_chq numeric;
+ls_cod_cuenta_contable_db text;
+ls_cod_cuenta_contable_cr text;
+ls_cod_cuenta_contable_db_chq text;
+ls_cod_cuenta_contable_cr_chq text;
+ld_fec_movimiento date;
+ls_cod_transaccion text;
+ldt_fec_usrmod timestamp without time zone;
+ldt_fec_registro timestamp without time zone;
+ldo_val_aut numeric;
+ll_cod_caja numeric;
+gdo_empleado numeric;
+a_cod_empleado numeric;
+li_cod_firma1 numeric;
+li_cod_firma2 numeric;
+ldo_num_documento numeric;
+ldo_num_libreta numeric;
+ldo_cod_empleado numeric;
+
+ls_txt_referencia text;
+ls_num_cheque numeric;
+
+
+ldo_val_atm_ret_con_redlocal numeric;
+ldo_val_atm_ret_con_banred numeric;
+ldo_val_atm_ret_con_conecta numeric;
+ldo_val_atm_ret_con_otrared numeric;
+ldo_val_atm_ret_con_iva_redlocal numeric;
+ldo_val_atm_ret_con_iva_banred numeric;
+ldo_val_atm_ret_con_iva_conecta numeric;
+ldo_val_atm_ret_con_iva_otrared numeric;
+ldo_val_comision numeric;
+ldo_val_atm_ret_redlocal numeric;
+ldo_val_atm_ret_banred numeric;
+ldo_val_atm_ret_conecta numeric;
+ldo_val_atm_ret_otrared numeric;
+ldo_val_atm_ret_iva_redlocal numeric;
+ldo_val_atm_ret_iva_banred numeric;
+ldo_val_atm_ret_iva_conecta numeric;
+ldo_val_atm_ret_iva_otrared numeric;
+ldo_val_comision_ret numeric;
+BEGIN
+
+if isnull(a_val_retiro,-1) = -1 then
+a_val_retiro :=0;
+end if;
+
+a_cod_empleado := 99;
+
+-- comision por retiro con consulta impresa
+ldo_val_atm_ret_con_redlocal := 0;
+ldo_val_atm_ret_con_banred := 0;
+ldo_val_atm_ret_con_conecta := 0;
+ldo_val_atm_ret_con_otrared := 0;
+ldo_val_atm_ret_con_iva_redlocal := 0;
+ldo_val_atm_ret_con_iva_banred := 0;
+ldo_val_atm_ret_con_iva_conecta := 0;
+ldo_val_atm_ret_con_iva_otrared := 0;
+ldo_val_atm_ret_redlocal := 0;
+ldo_val_atm_ret_banred := 0;
+ldo_val_atm_ret_conecta := 0;
+ldo_val_atm_ret_otrared := 0;
+ldo_val_atm_ret_iva_redlocal := 0;
+ldo_val_atm_ret_iva_banred := 0;
+ldo_val_atm_ret_iva_conecta := 0;
+ldo_val_atm_ret_iva_otrared := 0;
+ldo_val_comision := 0;
+ldo_val_comision_ret := 0;
+li_res := 1;
+
+if li_res = 1 then
+SELECT val_atm_ret_con_redlocal,
+val_atm_ret_con_banred,
+val_atm_ret_con_conecta,
+val_atm_ret_con_otrared,
+val_atm_ret_con_iva_redlocal,
+val_atm_ret_con_iva_banred,
+val_atm_ret_con_iva_conecta,
+val_atm_ret_con_iva_otrared ,
+val_atm_ret_redlocal,
+val_atm_ret_banred,
+val_atm_ret_conecta,
+val_atm_ret_otrared,
+val_atm_ret_iva_redlocal,
+val_atm_ret_iva_banred,
+val_atm_ret_iva_conecta,
+val_atm_ret_iva_otrared
+into
+ldo_val_atm_ret_con_redlocal,
+ldo_val_atm_ret_con_banred,
+ldo_val_atm_ret_con_conecta,
+ldo_val_atm_ret_con_otrared,
+ldo_val_atm_ret_con_iva_redlocal,
+ldo_val_atm_ret_con_iva_banred,
+ldo_val_atm_ret_con_iva_conecta,
+ldo_val_atm_ret_con_iva_otrared ,
+ldo_val_atm_ret_redlocal,
+ldo_val_atm_ret_banred,
+ldo_val_atm_ret_conecta,
+ldo_val_atm_ret_otrared,
+ldo_val_atm_ret_iva_redlocal,
+ldo_val_atm_ret_iva_banred,
+ldo_val_atm_ret_iva_conecta,
+ldo_val_atm_ret_iva_otrared
+FROM sgf_prod_comision
+where cod_producto = a_cod_producto;
+if found then
+
+ldo_val_comision := ldo_val_atm_ret_otrared;
+
+end if;
+end if;
+ldo_val_comision := 0;
+ldo_val_comision_ret := 0;
+
+if li_res = 1 then
+
+select fec_mov
+into gd_fecmov
+from gen_empresa
+where cod_empresa = 1;
+if not found then
+li_res := -4; -- no pudo obtener la fecha
+else
+gy_cod_caja := 99;
+
+select sts_apecie
+into ls_sts_apecie
+from sgf_caja, gen_empleado
+where sgf_caja.cod_caja = gy_cod_caja
+and sgf_caja.cod_empleado = gen_empleado.cod_empleado;
+if not found then
+li_res := -5; -- no existe caja
+
+end if;
+end if;
+end if;
+
+if li_res = 1 then
+li_cod_producto := a_cod_producto;
+ldo_cod_cuenta := a_cod_cuenta;
+ldo_val_efe := a_val_retiro + ldo_val_comision + ldo_val_comision_ret;
+ldo_val_chq := 0;
+ldo_val_efectivo := ldo_val_efe;
+ldo_val_cheques := ldo_val_chq;
+
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) - ldo_val_efe - ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+
+IF not found THEN
+li_res := -6; -- ls_txt_error="No es posible actualizar el saldo en la cuenta"
+else
+ldo_val_aut := 0;
+
+select val_inicial_apertura
+into ldo_val_aut
+from sgf_cuenta
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+if ldo_val_aut < 0 then
+li_res := -7; -- ls_txt_error="El monto a Retirar excede el limite permitido"
+
+-- reversa
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+
+end if;
+end if;
+
+end if;
+
+if li_res = 1 then
+ldo_val_saldo := 0;
+
+update sgf_cuenta
+set val_saldo = val_saldo - (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+val_efectivo = val_efectivo - (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+where cod_producto = a_cod_producto
+and cod_cuenta = a_cod_cuenta;
+IF found THEN
+
+select val_saldo, val_efectivo
+into ldo_val_saldo, ldo_val_disponible
+from sgf_cuenta
+where cod_producto = a_cod_producto
+and cod_cuenta = a_cod_cuenta;
+
+
+if isnull(ldo_val_saldo,-1) = -1 or ldo_val_saldo < 0 then
+li_res := -3;
+end if;
+
+if isnull(ldo_val_disponible,-1) = -1 or ldo_val_disponible < 0 then
+li_res := -3;
+end if;
+
+else
+li_res := -2;
+-- reversa update anterior
+update sgf_cuenta
+set val_inicial_apertura = isnull(val_inicial_apertura,0) + ldo_val_efe + ldo_val_chq
+where cod_producto = li_cod_producto
+and cod_cuenta = ldo_cod_cuenta;
+end if;
+--li_res := a_val_retiro;
+end if;
+
+if li_res = 1 then
+ls_cod_transaccion :='NDT01';
+gi_oficina := 1;
+
+select cod_oficina
+into gi_oficina
+from gen_empleado
+where cod_empleado = a_cod_empleado;
+if isnull(gi_oficina,0) = 0 then
+gi_oficina=1;
+end if;
+
+li_cod_oficina := gi_oficina;
+
+ll_cod_caja := gy_cod_caja;
+ld_fec_movimiento := gd_fecmov;
+
+
+update sgf_tran
+set num_transaccion = isnull(num_transaccion,0) + 1
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+if not found then
+li_res := -8; -- ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+else
+select num_transaccion
+into ldo_num_transaccion
+from sgf_tran
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+if not found then
+li_res := -9; -- no existe transaccion
+end if;
+end if;
+
+end if;
+
+if li_res = 1 then
+
+--li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+--li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+--ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+--ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+gdo_cod_empleado := 99;
+ldo_cod_empleado := gdo_empleado;
+select current_timestamp
+into ldt_fec_usrmod;
+
+if a_fecha = gd_fecmov then
+ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+else
+ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+
+end if;
+
+--ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+--ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+ll_num_reg := 0;
+INSERT INTO sgf_cab_mov_dia
+( cod_oficina,
+cod_transaccion,
+num_transaccion,
+fec_movimiento,
+cod_caja,
+sts_cab_mov,
+cod_firma1,
+cod_firma2,
+num_documento,
+num_libreta,
+cod_usrmod,
+fec_usrmod,
+txt_referencia,
+num_cheque )
+VALUES ( li_cod_oficina,
+ls_cod_transaccion,
+ldo_num_transaccion,
+ld_fec_movimiento,
+ll_cod_caja,
+'A',
+li_cod_firma1,
+li_cod_firma2,
+ldo_num_documento,
+ldo_num_libreta,
+ldo_cod_empleado,
+ldt_fec_usrmod,
+ls_txt_referencia,
+ls_num_cheque)
+RETURNING * INTO ll_num_reg ;
+if ll_num_reg <= 0 then
+li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+
+end if;
+
+if li_res = 1 then
+
+select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+from sgf_tran
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+
+end if;
+
+if li_res = 1 then
+
+INSERT INTO sgf_det_mov_dia
+( cod_oficina,
+cod_transaccion,
+num_transaccion,
+num_sec,
+fec_movimiento,
+cod_producto,
+cod_cuenta,
+val_cheques,
+val_efectivo,
+sts_mov,
+cod_cuenta_contab_db,
+cod_cuenta_contab_cr,
+txt_referencia,
+cod_usrmod,
+fec_usrmod,
+val_saldo)
+VALUES ( li_cod_oficina,
+ls_cod_transaccion,
+ldo_num_transaccion,
+1,
+ldt_fec_registro,
+li_cod_producto,
+ldo_cod_cuenta,
+ldo_val_cheques,
+a_val_retiro,
+'A',
+ls_cod_cuenta_contable_db,
+ls_cod_cuenta_contable_cr,
+ls_txt_referencia,
+ldo_cod_empleado,
+ldt_fec_usrmod,
+ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret)
+RETURNING * INTO ll_num_reg ;
+if ll_num_reg <= 0 then
+li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+
+
+end if;
+
+if li_res = 1 then
+
+update sgf_det_mov_dia
+set val_saldo = ldo_val_saldo + ldo_val_comision + ldo_val_comision_ret
+where cod_oficina = li_cod_oficina
+and cod_transaccion = ls_cod_transaccion
+and num_transaccion = ldo_num_transaccion
+and num_sec = 1;
+if not found then
+li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+
+end if;
+end if;
+
+-- registra comision
+--ls_cod_transaccion :='NDCTR';
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+--
+-- gi_oficina := 1;
+-- li_cod_oficina := gi_oficina;
+--
+-- ll_cod_caja := gy_cod_caja;
+-- ld_fec_movimiento := gd_fecmov;
+
+
+-- update sgf_tran
+-- set num_transaccion = isnull(num_transaccion,0) + 1
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+-- if not found then
+-- li_res := -8; -- ls_txt_error="No es posible actualizar el n?mero de la transacciÛn"
+-- else
+-- select num_transaccion
+-- into ldo_num_transaccion
+-- from sgf_tran
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+-- if not found then
+-- li_res := -9; -- no existe transaccion
+-- end if;
+-- end if;
+
+-- end if;
+
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- --li_cod_firma1=tab_1.transaccion.dw_1.object.cod_firma1[1]
+-- --li_cod_firma2=tab_1.transaccion.dw_1.object.cod_firma2[1]
+-- --ldo_num_documento=tab_1.transaccion.dw_1.object.num_documento[1]
+-- --ldo_num_libreta=tab_1.transaccion.dw_1.object.num_libreta[1]
+-- gdo_cod_empleado := 99;
+-- ldo_cod_empleado := gdo_empleado;
+-- select current_timestamp
+-- into ldt_fec_usrmod;
+
+-- if a_fecha = gd_fecmov then
+-- ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' ' || to_char(current_timestamp,'hh24:mi:ss'),'yyyy/mm/dd hh24:mi:ss');
+-- else
+-- ldt_fec_registro := to_timestamp(to_char(gd_fecmov,'yyyy/mm/dd') || ' 23:59:59','yyyy/mm/dd hh24:mi:ss');
+
+-- end if;
+
+-- --ls_txt_referencia=tab_1.transaccion.dw_1.object.txt_referencia[1]
+-- --ls_num_cheque=tab_1.transaccion.dw_1.object.num_cheque[1]
+-- ll_num_reg := 0;
+-- INSERT INTO sgf_cab_mov_dia
+-- ( cod_oficina,
+-- cod_transaccion,
+-- num_transaccion,
+-- fec_movimiento,
+-- cod_caja,
+-- sts_cab_mov,
+-- cod_firma1,
+-- cod_firma2,
+-- num_documento,
+-- num_libreta,
+-- cod_usrmod,
+-- fec_usrmod,
+-- txt_referencia,
+-- num_cheque )
+-- VALUES ( li_cod_oficina,
+-- ls_cod_transaccion,
+-- ldo_num_transaccion,
+-- ld_fec_movimiento,
+-- ll_cod_caja,
+-- 'A',
+-- li_cod_firma1,
+-- li_cod_firma2,
+-- ldo_num_documento,
+-- ldo_num_libreta,
+-- ldo_cod_empleado,
+-- ldt_fec_usrmod,
+-- ls_txt_referencia,
+-- ls_num_cheque)
+-- RETURNING * INTO ll_num_reg ;
+-- if ll_num_reg <= 0 then
+-- li_res := -10; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+
+-- end if;
+
+-- end if;
+
+-- if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- select cod_cuenta_contable_db , cod_cuenta_contable_cr , cod_cuenta_contable_db_chq, cod_cuenta_contable_cr_chq
+-- into ls_cod_cuenta_contable_db , ls_cod_cuenta_contable_cr , ls_cod_cuenta_contable_db_chq, ls_cod_cuenta_contable_cr_chq
+-- from sgf_tran
+-- where cod_transaccion = ls_cod_transaccion
+-- and cod_oficina = li_cod_oficina;
+
+-- end if;
+
+-- if li_res = 1 then
+
+-- INSERT INTO sgf_det_mov_dia
+-- ( cod_oficina,
+-- cod_transaccion,
+-- num_transaccion,
+-- num_sec,
+-- fec_movimiento,
+-- cod_producto,
+-- cod_cuenta,
+-- val_cheques,
+-- val_efectivo,
+-- sts_mov,
+-- cod_cuenta_contab_db,
+-- cod_cuenta_contab_cr,
+-- txt_referencia,
+-- cod_usrmod,
+-- fec_usrmod,
+-- val_saldo)
+-- VALUES ( li_cod_oficina,
+-- ls_cod_transaccion,
+-- ldo_num_transaccion,
+-- 1,
+-- ldt_fec_registro,
+-- li_cod_producto,
+-- ldo_cod_cuenta,
+-- ldo_val_cheques,
+-- ldo_val_comision + ldo_val_comision_ret,
+-- 'A',
+-- ls_cod_cuenta_contable_db,
+-- ls_cod_cuenta_contable_cr,
+-- ls_txt_referencia,
+-- ldo_cod_empleado,
+-- ldt_fec_usrmod,
+-- ldo_val_saldo)
+-- RETURNING * INTO ll_num_reg ;
+-- if ll_num_reg <= 0 then
+-- li_res := -11; --ls_txt_error="No es posible grabar la transacciÛn, "+sqlca.sqlerrtext
+--
+-- end if;
+
+
+-- end if;
+
+--if li_res = 1 and ldo_val_comision + ldo_val_comision_ret > 0 then
+
+-- update sgf_det_mov_dia
+-- set val_saldo = ldo_val_saldo
+-- where cod_oficina = li_cod_oficina
+-- and cod_transaccion = ls_cod_transaccion
+-- and num_transaccion = ldo_num_transaccion
+-- and num_sec = 1;
+-- if not found then
+-- li_res := -12; --ls_txt_error="No es posible grabar el saldo en el detalle de la transacciÛn, "+sqlca.sqlerrtext
+--
+-- end if;
+-- end if;
+
+-- REVERSA saldo
+-- if li_res = -3 or li_res < -7 then
+-- update sgf_cuenta
+-- set val_saldo = val_saldo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret),
+-- val_efectivo = val_efectivo + (a_val_retiro + ldo_val_comision + ldo_val_comision_ret)
+-- where cod_producto = a_cod_producto
+-- and cod_cuenta = a_cod_cuenta;
+
+-- end if;
+-- reversa act tran
+if li_res < -8 then
+update sgf_tran
+set num_transaccion = isnull(num_transaccion,0) - 1
+where cod_transaccion = ls_cod_transaccion
+and cod_oficina = li_cod_oficina;
+end if;
+
+
+--if li_res = 1 then
+-- commit;
+-- else
+-- rollback TO SAVEPOINT my_savepoint;
+-- end if;
+
+a_sts_retorno := li_res;
+--if li_res <> 1 then
+--reaise exception '';
+--end if;
+
+
+--EXCEPTION
+--WHEN raise_exception THEN
+
+-- ROLLBACK TO s1;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION coop_sp_ndt_interna(numeric, numeric, date, numeric)
+  OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION coop_sp_ndt_interna(numeric, numeric, date, numeric) TO public;
+GRANT EXECUTE ON FUNCTION coop_sp_ndt_interna(numeric, numeric, date, numeric) TO postgres;
+
+
+
+CREATE TABLE sgf_prod_comision
+(
+  cod_producto numeric(2,0) NOT NULL,
+  val_atm_con_imp_redlocal numeric(18,2),
+  val_atm_con_imp_banred numeric(18,2),
+  val_atm_con_imp_conecta numeric(18,2),
+  val_atm_con_imp_otrared numeric(18,2),
+  val_atm_con_imp_iva_redlocal numeric(18,2),
+  val_atm_con_imp_iva_banred numeric(18,2),
+  val_atm_con_imp_iva_conecta numeric(18,2),
+  val_atm_con_imp_iva_otrared numeric(18,2),
+  val_atm_ret_con_redlocal numeric(18,2),
+  val_atm_ret_con_banred numeric(18,2),
+  val_atm_ret_con_conecta numeric(18,2),
+  val_atm_ret_con_otrared numeric(18,2),
+  val_atm_ret_con_iva_redlocal numeric(18,2),
+  val_atm_ret_con_iva_banred numeric(18,2),
+  val_atm_ret_con_iva_conecta numeric(18,2),
+  val_atm_ret_con_iva_otrared numeric(18,2),
+  val_atm_ret_redlocal numeric(18,2),
+  val_atm_ret_banred numeric(18,2),
+  val_atm_ret_conecta numeric(18,2),
+  val_atm_ret_otrared numeric(18,2),
+  val_atm_ret_iva_redlocal numeric(18,2),
+  val_atm_ret_iva_banred numeric(18,2),
+  val_atm_ret_iva_conecta numeric(18,2),
+  val_atm_ret_iva_otrared numeric(18,2),
+  val_atm_compra_cta_ahorros numeric(18,2),
+  val_atm_compra_iva_cta_ahorros numeric(18,2),
+  val_atm_compra_cta_universal numeric(18,2),
+  val_atm_compra_iva_cta_universal numeric(18,2),
+  CONSTRAINT sgf_prod_comision_pkey PRIMARY KEY (cod_producto )
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE sgf_prod_comision
+  OWNER TO postgres;
+  
+  
+  
+  
+  
+  
+
+
+
+
