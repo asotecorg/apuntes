@@ -1,6 +1,6 @@
 # GroovyEvaluator not found
 
-## Luego de modificar el jrxml con jasper irepors 5.6 se produce ese error
+## Luego de modificar el jrxml con jasper ireports 5.6 se produce ese error
 
 Pude resolver esto por:
 
